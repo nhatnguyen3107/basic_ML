@@ -1,6 +1,8 @@
 import pandas as pd 
 import os
 import numpy as np 
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import StandardScaler
 
 def load_data(train_file, test_file): #load data from file name
     data_train = pd.read_excel(train_file)
@@ -106,23 +108,45 @@ def feat_decoding_and_scaling(train_set_feat, test_set_feat):
     X_numerical_feat_train = X_feat_train.select_dtypes(include=['int'])
     X_categorical_feat_predict = X_feat_predict.select_dtypes(exclude=['int'])
     X_numerical_feat_predict = X_feat_predict.select_dtypes(include=['int'])
-    print(X_categorical_feat_predict.columns)
-    print(X_numerical_feat_predict.columns)
+    # print(X_categorical_feat_predict.columns)
+    # print(X_numerical_feat_predict.columns)
     
+    # ENCODING CATEGORICAL FEATURES
+    label_encoder = LabelEncoder()
+    X_categorical_feat_train = X_categorical_feat_train.apply(label_encoder.fit_transform, axis=1)
+    # print(X_categorical_feat_train.head())
+    X_categorical_feat_predict = X_categorical_feat_predict.apply(label_encoder.fit_transform, axis=1)
+    # print(X_categorical_feat_predict.head())
 
-
+    # SCALING NUMERICAL FEATURES with Standard Scaler
+    standard_scaler = StandardScaler()
+    X_train_scaled = standard_scaler.fit_transform(X_numerical_feat_train)
+    X_predict_scaled = standard_scaler.fit_transform(X_numerical_feat_predict)
+    X_numerical_feat_train = pd.DataFrame(data=X_train_scaled, columns=X_numerical_feat_train.columns)
+    X_numerical_feat_predict = pd.DataFrame(data=X_predict_scaled, columns=X_numerical_feat_predict.columns)
+    # print(X_numerical_feat_train.head())
+    train_set_feat_after = pd.concat([X_categorical_feat_train, X_numerical_feat_train], axis = 1)
+    train_set_feat_after['Price'] = y_target_train
+    predict_set_feat_after = pd.concat([X_categorical_feat_predict, X_numerical_feat_predict], axis = 1)
+    # print(X_feat_train.head())
+    train_set_feat_after.to_excel('final_feature/train_feat_after_tranforming.xlsx')
+    predict_set_feat_after.to_excel('final_feature/predict_feat_after_tranforning.xlsx')
+    # print(train_set_feat_after.shape, predict_set_feat_after.shape)
 
 
 
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
-    # print('Train Data Shape: ', train_data_frame.shape)
-    # print('Test Data Shape: ', test_data_frame.shape)
+    print('Train Data Shape: ', raw_train_data_frame.shape)
+    print('Test Data Shape: ', raw_test_data_frame.shape)
     clean_train_data_frame, clean_test_data_frame = clean_data(raw_train_data_frame.copy(), raw_test_data_frame.copy()) #stored in clean_data
-    # print('After cleaning')
-    # print('Train Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_train_data_frame.shape, train_data_frame.shape[1]- clean_train_data_frame.shape[1], train_data_frame.shape[0]- clean_train_data_frame.shape[0]))
-    # print('Test Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_test_data_frame.shape, test_data_frame.shape[1]- clean_test_data_frame.shape[1], test_data_frame.shape[0]- clean_test_data_frame.shape[0]))
+    print('\nAfter cleaning')
+    print('Train Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_train_data_frame.shape, raw_train_data_frame.shape[1]- clean_train_data_frame.shape[1], raw_train_data_frame.shape[0]- clean_train_data_frame.shape[0]))
+    print('Test Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_test_data_frame.shape, raw_test_data_frame.shape[1]- clean_test_data_frame.shape[1], raw_test_data_frame.shape[0]- clean_test_data_frame.shape[0]))
     train_set_feat, test_set_feat = feature_engineering(clean_train_data_frame.copy(), clean_test_data_frame.copy()) # stored in raw_feature
-    feat_decoding_and_scaling(train_set_feat, test_set_feat)
-    
+    print('\nAfter engineering data')
+    print('The Number of features: ',train_set_feat.shape[1])
+    print('Include: ', train_set_feat.columns.tolist())
+    feat_decoding_and_scaling(train_set_feat, test_set_feat) #stored in final_feature
+    print('Preprocessing data is complete!')
 
