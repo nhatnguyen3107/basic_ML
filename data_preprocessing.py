@@ -5,6 +5,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.decomposition import PCA
 
 def load_data(train_file, test_file): #load data from file name
     data_train = pd.read_excel(train_file)
@@ -66,21 +67,30 @@ def feature_engineering(data_frame):
     # print(data_frame.head())
     return data_frame
 
-def feat_decoding_and_scaling(X_feats_set):
+def feat_encoding_and_scaling(X_feats_set, encode=True, scale=True):
     X_categorical_feats = X_feats_set.select_dtypes(exclude=['int', 'float'])
     X_numerical_feats = X_feats_set.select_dtypes(include=['int', 'float'])
     # ENCODING CATEGORICAL FEATURES
-    label_encoder = LabelEncoder()
-    X_categorical_feats = X_categorical_feats.apply(label_encoder.fit_transform)
+    if encode == True:
+        X_categorical_feats = encode_feat_with_label_encoder(X_categorical_feats)
 
     # SCALING NUMERICAL FEATURES with Standard Scaler
-    standard_scaler = StandardScaler()
-    X_scaled = standard_scaler.fit_transform(X_numerical_feats)
-    X_numerical_feats = pd.DataFrame(data=X_scaled, columns=X_numerical_feats.columns)
+    if scale == True:
+        X_numerical_feats = scale_feat_with_standard_scaler(X_numerical_feats)
+
     X_categorical_feats.reset_index(drop=True, inplace=True)
     X_numerical_feats.reset_index(drop=True, inplace=True)
     X_feats_set_after = pd.concat([X_categorical_feats, X_numerical_feats], axis = 1)
     return X_feats_set_after
+
+def encode_feat_with_label_encoder(X_categorical_feats):
+    label_encoder = LabelEncoder()
+    return X_categorical_feats.apply(label_encoder.fit_transform)
+
+def scale_feat_with_standard_scaler(X_numerical_feats):
+    standard_scaler = StandardScaler()
+    X_scaled = standard_scaler.fit_transform(X_numerical_feats)
+    return pd.DataFrame(data=X_scaled, columns=X_numerical_feats.columns)
 
 def select_features_by_random_forest_regressor(X, y):
     X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
@@ -88,8 +98,16 @@ def select_features_by_random_forest_regressor(X, y):
     model.fit(X_to_train, y_to_train)
     y_pred = model.predict(X_to_test)
     feature_importances = pd.DataFrame(model.feature_importances_, index=X.columns, columns=['Importance rate']).sort_values('Importance rate', ascending=False)
-    chosen_columns = feature_importances.loc[feature_importances['Importance rate']>=0.02]
-    print(chosen_columns)
+    chosen_columns = feature_importances.loc[feature_importances['Importance rate']>=0.01]
+    return chosen_columns.index.tolist()
+
+
+def reduce_features_by_pca(X):
+    pca = PCA(n_components='mle')
+    fit = pca.fit(X)
+    print('Explained_variance: ', fit.explained_variance_)
+    print('Ratio: ', fit.explained_variance_ratio_)
+    print('Components: ', fit.components_)
 
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
@@ -114,12 +132,22 @@ if __name__ == "__main__":
     
     X_feats_train = train_feat_frame.drop('Price', axis=1)
     y_target_train = np.log1p(train_feat_frame['Price'])
-    final_train_data = feat_decoding_and_scaling(X_feats_train)
-    final_train_data['Price'] = y_target_train
-    final_test_data = feat_decoding_and_scaling(test_feat_frame)
-    final_train_data.to_excel('final_feature/train_feat_after_tranforming.xlsx',index=False)
-    final_test_data.to_excel('final_feature/predict_feat_after_tranforning.xlsx',index=False)
+    # final_train_data = feat_encoding_and_scaling(X_feats_train)
+    tranformed_train_data = feat_encoding_and_scaling(X_feats_train)
+    tranformed_train_data['Price'] = y_target_train
+    tranformed_test_data = feat_encoding_and_scaling(test_feat_frame)
+    # final_test_data = feat_encoding_and_scaling(test_feat_frame, scale=False)
+    tranformed_train_data.to_excel('tranformed_feature/train_data_after_tranforming.xlsx',index=False)
+    tranformed_test_data.to_excel('tranformed_feature/test_data_after_tranforning.xlsx',index=False)
     
-    select_features_by_random_forest_regressor(final_train_data.drop('Price', axis=1),y_target_train)
+    selected_features = select_features_by_random_forest_regressor(tranformed_train_data.drop('Price', axis=1),y_target_train)
+    # reduce_features_by_pca(final_train_data.drop('Price', axis=1).values)
+    # reduce_features_by_pca(final_test_data.values)
+    print('\nAfter selecting feature \nRemaining features: ', selected_features)
+    selected_train_data = tranformed_train_data.filter(items= selected_features + ['Price'], axis=1)
+    selected_test_data = tranformed_test_data.filter(items= selected_features)
+    selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
+    selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
+
     print('Preprocessing data is complete!')
 
