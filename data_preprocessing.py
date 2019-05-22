@@ -1,6 +1,8 @@
 import pandas as pd 
 import os
 import numpy as np 
+from sklearn.svm import SVR
+from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -92,6 +94,10 @@ def scale_feat_with_standard_scaler(X_numerical_feats):
     X_scaled = standard_scaler.fit_transform(X_numerical_feats)
     return pd.DataFrame(data=X_scaled, columns=X_numerical_feats.columns)
 
+def evaluate_result(y_to_test, y_to_predict):
+    print('Accuracy: ', metrics.r2_score(y_to_test, y_to_predict))
+    print('Mean Square Error: ', metrics.mean_squared_error(y_to_test, y_to_predict))
+
 def select_features_by_random_forest_regressor(X, y):
     X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
     model = RandomForestRegressor(n_estimators=20, max_depth=5,random_state=42)
@@ -108,6 +114,16 @@ def reduce_features_by_pca(X):
     print('Explained_variance: ', fit.explained_variance_)
     print('Ratio: ', fit.explained_variance_ratio_)
     print('Components: ', fit.components_)
+
+def predict_by_SVR(data_frame):
+    X = data_frame.values[:,:-1]
+    y = data_frame.values[:,-1]
+    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
+    svr = SVR(kernel='rbf', degree=3)
+    svr.fit(X_to_train, y_to_train)
+    y_to_predict = svr.predict(X_to_test)
+    evaluate_result(y_to_test, y_to_predict)
+
 
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
@@ -149,5 +165,6 @@ if __name__ == "__main__":
     selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
     selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
 
+    predict_by_SVR(selected_train_data)
     print('Preprocessing data is complete!')
 
