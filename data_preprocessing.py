@@ -132,8 +132,8 @@ if __name__ == "__main__":
     
     clean_train_data_frame = clean_data(raw_train_data_frame.copy())
     clean_test_data_frame = clean_data(raw_test_data_frame.copy())
-    clean_train_data_frame.to_excel('clean_data/clean_data_train.xlsx')  
-    clean_test_data_frame.to_excel('clean_data/clean_test_set.xlsx')
+    clean_train_data_frame.to_excel('clean_data/clean_data_train.xlsx', index=False)  
+    clean_test_data_frame.to_excel('clean_data/clean_test_set.xlsx', index=False)
     print('\nAfter cleaning')
     print('Train Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_train_data_frame.shape, raw_train_data_frame.shape[1]- clean_train_data_frame.shape[1], raw_train_data_frame.shape[0]- clean_train_data_frame.shape[0]))
     print('Test Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_test_data_frame.shape, raw_test_data_frame.shape[1]- clean_test_data_frame.shape[1], raw_test_data_frame.shape[0]- clean_test_data_frame.shape[0]))
@@ -148,15 +148,16 @@ if __name__ == "__main__":
     
     X_feats_train = train_feat_frame.drop('Price', axis=1)
     y_target_train = np.log1p(train_feat_frame['Price'])
+    # print(y_target_train.values)
     # final_train_data = feat_encoding_and_scaling(X_feats_train)
     tranformed_train_data = feat_encoding_and_scaling(X_feats_train)
-    tranformed_train_data['Price'] = y_target_train
+    tranformed_train_data['Price'] = y_target_train.values
     tranformed_test_data = feat_encoding_and_scaling(test_feat_frame)
     # final_test_data = feat_encoding_and_scaling(test_feat_frame, scale=False)
     tranformed_train_data.to_excel('tranformed_feature/train_data_after_tranforming.xlsx',index=False)
     tranformed_test_data.to_excel('tranformed_feature/test_data_after_tranforning.xlsx',index=False)
     
-    selected_features = select_features_by_random_forest_regressor(tranformed_train_data.drop('Price', axis=1),y_target_train)
+    selected_features = select_features_by_random_forest_regressor(tranformed_train_data.drop('Price', axis=1),y_target_train.values)
     # reduce_features_by_pca(final_train_data.drop('Price', axis=1).values)
     # reduce_features_by_pca(final_test_data.values)
     print('\nAfter selecting feature \nRemaining features: ', selected_features)
