@@ -5,6 +5,8 @@ from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import ShuffleSplit
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.decomposition import PCA
 from sklearn.svm import SVR
@@ -119,11 +121,14 @@ def select_features_by_random_forest_regressor(X, y):
 
 
 def reduce_features_by_pca(X):
-    pca = PCA(n_components='mle')
+    pca = PCA(n_components=5)
     fit = pca.fit(X)
+    new_X = pca.transform(fit)
+    new_data = pd.DataFrame(data=new_X)
     print('Explained_variance: ', fit.explained_variance_)
     print('Ratio: ', fit.explained_variance_ratio_)
     print('Components: ', fit.components_)
+    return new_data
 
 def predict_by_SVR(data_frame):
     X = data_frame.values[:,:-1]
@@ -143,6 +148,21 @@ def predict_by_linear_regression(data_frame):
     y_to_predict = lireg.predict(X_to_test)
     evaluate_result(y_to_test, y_to_predict)
 
+def predict_by_RFR_combine_randomsearchCV(data_frame):
+    X = data_frame.values[:,:-1]
+    y = data_frame.values[:,-1]
+    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
+    estimator = RandomForestRegressor()
+    cv = ShuffleSplit(n_splits=5, random_state=42, test_size=0.3)
+    random_grid = {'max_features' : ['auto', 'sqrt', 'log2'],
+                    'n_estimators': [10, 18, 22, 200, 700],
+                    'min_samples_split': [2, 5, 10],
+                    'min_samples_leaf' : [1, 2, 4]}
+    rf_random = RandomizedSearchCV(estimator=estimator, param_distributions=random_grid, cv=cv, random_state=42, n_jobs=4)
+    rf_random.fit(X_to_train, y_to_train)
+    y_to_predict = rf_random.predict(X_to_test)
+    # print('Best hyper-para after tuning', rf_random.best_params_)
+    evaluate_result(y_to_test, y_to_predict)
 
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
@@ -172,20 +192,24 @@ if __name__ == "__main__":
     tranformed_train_data = feat_encoding_and_scaling(X_feats_train)
     tranformed_train_data['Price'] = y_target_train.values
     tranformed_test_data = feat_encoding_and_scaling(test_feat_frame)
-    # final_test_data = feat_encoding_and_scaling(test_feat_frame, scale=False)
+    # tranformed_test_data = feat_encoding_and_scaling(test_feat_frame, scale=False)
     tranformed_train_data.to_excel('tranformed_feature/train_data_after_tranforming.xlsx',index=False)
     tranformed_test_data.to_excel('tranformed_feature/test_data_after_tranforning.xlsx',index=False)
     
-    selected_features = select_features_by_random_forest_regressor(tranformed_train_data.drop('Price', axis=1),y_target_train.values)
-    # reduce_features_by_pca(final_train_data.drop('Price', axis=1).values)
-    # reduce_features_by_pca(final_test_data.values)
-    print('\nAfter selecting feature \nRemaining features: ', selected_features)
-    selected_train_data = tranformed_train_data.filter(items= selected_features + ['Price'], axis=1)
-    selected_test_data = tranformed_test_data.filter(items= selected_features)
+    # selected_features = select_features_by_random_forest_regressor(tranformed_train_data.drop('Price', axis=1),y_target_train.values)
+    # selected_train_data = tranformed_train_data.filter(items= selected_features + ['Price'], axis=1)
+    # selected_test_data = tranformed_test_data.filter(items= selected_features)
+    # print('\nAfter selecting feature \nRemaining features: ', selected_features)
+    selected_train_data = reduce_features_by_pca(tranformed_train_data.drop('Price', axis=1).values)
+    selected_train_data['Price'] = y_target_train.values
+    selected_test_data = reduce_features_by_pca(tranformed_test_data.values)
+    selected_test_data['Price'] = y_target_train.values
     selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
     selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
 
+    print('\nTraining data...')
     # predict_by_SVR(selected_train_data)
     # predict_by_linear_regression(selected_train_data)
+    predict_by_RFR_combine_randomsearchCV(selected_train_data)
     print('Preprocessing data is complete!')
 
