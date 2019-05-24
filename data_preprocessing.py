@@ -1,13 +1,14 @@
 import pandas as pd 
 import os
 import numpy as np 
-from sklearn.svm import SVR
 from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.decomposition import PCA
+from sklearn.svm import SVR
+from sklearn.linear_model import LinearRegression
 
 def load_data(train_file, test_file): #load data from file name
     data_train = pd.read_excel(train_file)
@@ -25,46 +26,55 @@ def clean_data(data_frame): # clean null and duplicated points
     data_frame.drop_duplicates(keep = 'first', inplace = True)
     return data_frame
     
-def feature_engineering(data_frame):
+def convert_time_to_day_period(data_frame, column):
+    hour = list(pd.to_datetime(data_frame[column]).dt.hour)
+    period_of_day = ['Morning', 'Noon', 'Evening', 'Night'] # [3->9h, 9->15h, 15->21h, 21->3h ]
+    data_frame['Day_Period_of_' + column] = [period_of_day[(x+3)//6-1] for x in hour]
+    return data_frame.drop(column, axis=1)
+
+def merge_value(data_frame, column, val_source, val_des):
+    return data_frame.replace({column:{'New Delhi':'Delhi'}})
+
+def synchronize_format_time(data_frame, column):
+    copy_list = list(data_frame[column])
+    for i in range(len(copy_list)):
+        _split = copy_list[i].split()
+        if len(_split) == 1 and _split[0][-1] == 'h':
+            copy_list[i] = copy_list[i] + ' 0m'
+        elif len(_split) == 1 and _split[0][-1] == 'm':
+            copy_list[i] = '0h ' + copy_list[i]
+    data_frame[column] = copy_list
+    return data_frame
+
+def parse_hour_to_minute(data_frame, column):
+    copy_list = list(data_frame[column])
+    data_frame[column] = [int(copy_list[i].split()[0][:-1])*60 + int(copy_list[i].split()[1][:-1]) for i in range(len(copy_list))]
+    data_frame[column] = data_frame[column].astype(float)
+    return data_frame
+
+def generate_features(data_frame):
     # Date_of_Journey Column processing, pick month and day_of_week (has a little range)
     data_frame['Month_of_Journey'] = pd.to_datetime(data_frame['Date_of_Journey'], format='%d/%m/%Y').dt.month.astype(float)
     data_frame['Day_of_Week'] = pd.to_datetime(data_frame['Date_of_Journey'], format='%d/%m/%Y').dt.dayofweek.astype(float)
     data_frame.drop('Date_of_Journey', axis=1, inplace=True)
 
     # Source and Destination processing, synchronize 2 near place or be just the same place
-    # print(data_frame['Source'].value_counts())
-    # print(data_frame['Destination'].value_counts()) # non-clear: New Delhi and Delhi
-    data_frame.replace({'Destination':{'New Delhi':'Delhi'}}, inplace=True)
-    # print(data_frame['Destination'].value_counts()) # recheck
+    data_frame = merge_value(data_frame, 'Destination', 'New Delhi', 'Delhi')
 
     # Dep_Time and Arrival_Time Column processing, attribute time to period of day
-    depart_hour_train = list(pd.to_datetime(data_frame['Dep_Time']).dt.hour)
-    arrival_hour_train = list(pd.to_datetime(data_frame['Arrival_Time']).dt.hour)
-    period_of_day = ['Morning', 'Noon', 'Evening', 'Night'] # [3->9h, 9->15h, 15->21h, 21->3h ]
-    data_frame['Dep_Day_Period'] = [period_of_day[(x+3)//6-1] for x in depart_hour_train]
-    data_frame['Arrival_Day_Period'] = [period_of_day[(x+3)//6-1] for x in arrival_hour_train]
-    data_frame.drop(['Dep_Time','Arrival_Time'], axis=1, inplace=True)
-    
+    data_frame = convert_time_to_day_period(data_frame, 'Dep_Time')
+    data_frame = convert_time_to_day_period(data_frame, 'Arrival_Time')
+
     # Duration Column processing, attribute to one unit (minutes)
-    duration_train = list(data_frame['Duration'])
-    for i in range(len(duration_train)):
-        spl = duration_train[i].split()
-        if len(spl) == 1 and spl[0][-1] == 'h':
-            duration_train[i] = duration_train[i] + ' 0m'
-        elif len(spl) == 1 and spl[0][-1] == 'm':
-            duration_train[i] = '0h ' + duration_train[i]
-    data_frame['Duration'] = [int(duration_train[i].split()[0][:-1])*60 + int(duration_train[i].split()[1][:-1]) for i in range(len(duration_train))]
-    data_frame['Duration'] = data_frame['Duration'].astype(float)
+    data_frame = synchronize_format_time(data_frame, 'Duration')
+    data_frame = parse_hour_to_minute(data_frame, 'Duration')
     
     #Total_Stop Column processing
-    # print(data_frame['Total_Stops'].value_counts())
     data_frame.replace({'Total_Stops':{'non-stop':0, '1 stop':1, '2 stops': 2, '3 stops': 3, '4 stops': 4}}, inplace=True)
     data_frame['Total_Stops'] = data_frame['Total_Stops'].astype(float)
     
     #Additional_Info Column processing
-    # print(data_frame['Additional_Info'].value_counts())
-    data_frame.replace({'Additional_Info':{'No Info': 'No info'}}, inplace=True)
-    # print(data_frame['Additional_Info'].value_counts())
+    data_frame = merge_value(data_frame, 'Additional_Info', 'No Info', 'No info')
 
     # print(data_frame.head())
     return data_frame
@@ -119,9 +129,18 @@ def predict_by_SVR(data_frame):
     X = data_frame.values[:,:-1]
     y = data_frame.values[:,-1]
     X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
-    svr = SVR(kernel='rbf', degree=3)
+    svr = SVR(kernel= 'rbf', degree=4, gamma='auto')
     svr.fit(X_to_train, y_to_train)
     y_to_predict = svr.predict(X_to_test)
+    evaluate_result(y_to_test, y_to_predict)
+
+def predict_by_linear_regression(data_frame):
+    X = data_frame.values[:,:-1]
+    y = data_frame.values[:,-1]
+    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
+    lireg = LinearRegression(fit_intercept=True, normalize=True)
+    lireg.fit(X_to_train, y_to_train)
+    y_to_predict = lireg.predict(X_to_test)
     evaluate_result(y_to_test, y_to_predict)
 
 
@@ -138,8 +157,8 @@ if __name__ == "__main__":
     print('Train Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_train_data_frame.shape, raw_train_data_frame.shape[1]- clean_train_data_frame.shape[1], raw_train_data_frame.shape[0]- clean_train_data_frame.shape[0]))
     print('Test Data Shape: {}. Removed {} column(s) and {} record(s)'.format(clean_test_data_frame.shape, raw_test_data_frame.shape[1]- clean_test_data_frame.shape[1], raw_test_data_frame.shape[0]- clean_test_data_frame.shape[0]))
     
-    train_feat_frame = feature_engineering(clean_train_data_frame.copy())
-    test_feat_frame =  feature_engineering(clean_test_data_frame.copy())
+    train_feat_frame = generate_features(clean_train_data_frame.copy())
+    test_feat_frame =  generate_features(clean_test_data_frame.copy())
     train_feat_frame.to_excel('raw_feature/train_data_feature.xlsx', index=False)
     test_feat_frame.to_excel('raw_feature/test_data_feature.xlsx',index=False)
     print('\nAfter engineering data')
@@ -166,6 +185,7 @@ if __name__ == "__main__":
     selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
     selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
 
-    predict_by_SVR(selected_train_data)
+    # predict_by_SVR(selected_train_data)
+    # predict_by_linear_regression(selected_train_data)
     print('Preprocessing data is complete!')
 
