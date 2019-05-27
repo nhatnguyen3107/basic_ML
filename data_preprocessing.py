@@ -11,6 +11,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.decomposition import PCA
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LogisticRegression
 
 def load_data(train_file, test_file): #load data from file name
     data_train = pd.read_excel(train_file)
@@ -121,13 +122,13 @@ def select_features_by_random_forest_regressor(X, y):
 
 
 def reduce_features_by_pca(X):
-    pca = PCA(n_components=5)
-    fit = pca.fit(X)
-    new_X = pca.transform(fit)
-    new_data = pd.DataFrame(data=new_X)
-    print('Explained_variance: ', fit.explained_variance_)
-    print('Ratio: ', fit.explained_variance_ratio_)
-    print('Components: ', fit.components_)
+    pca = PCA(n_components='mle')
+    fit = pca.fit_transform(X)
+    # new_X = pca.transform(fit)
+    new_data = pd.DataFrame(data=fit)
+    # print('Explained_variance: ', fit.explained_variance_)
+    # print('Ratio: ', fit.explained_variance_ratio_)
+    # print('Components: ', fit.components_)
     return new_data
 
 def predict_by_SVR(data_frame):
@@ -161,8 +162,17 @@ def predict_by_RFR_combine_randomsearchCV(data_frame):
     rf_random = RandomizedSearchCV(estimator=estimator, param_distributions=random_grid, cv=cv, random_state=42, n_jobs=4)
     rf_random.fit(X_to_train, y_to_train)
     y_to_predict = rf_random.predict(X_to_test)
-    # print('Best hyper-para after tuning', rf_random.best_params_)
+    print('Best hyper-para after tuning', rf_random.best_params_)
     evaluate_result(y_to_test, y_to_predict)
+
+def predict_non_label_data_by_RFR(train_data, predict_data):
+    X_to_train = train_data.drop('Price', axis=1)
+    y_to_train = train_data['Price']
+    rfr = RandomForestRegressor(n_estimators=700, min_samples_split=2, min_samples_leaf=2, max_features = 'auto')
+    rfr.fit(X_to_train, y_to_train)
+    y_predict = rfr.predict(predict_data)
+    return y_predict
+
 
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
@@ -170,7 +180,7 @@ if __name__ == "__main__":
     print('Test Data Shape: ', raw_test_data_frame.shape)
     
     clean_train_data_frame = clean_data(raw_train_data_frame.copy())
-    clean_test_data_frame = clean_data(raw_test_data_frame.copy())
+    clean_test_data_frame = raw_test_data_frame.copy()
     clean_train_data_frame.to_excel('clean_data/clean_data_train.xlsx', index=False)  
     clean_test_data_frame.to_excel('clean_data/clean_test_set.xlsx', index=False)
     print('\nAfter cleaning')
@@ -203,13 +213,15 @@ if __name__ == "__main__":
     selected_train_data = reduce_features_by_pca(tranformed_train_data.drop('Price', axis=1).values)
     selected_train_data['Price'] = y_target_train.values
     selected_test_data = reduce_features_by_pca(tranformed_test_data.values)
-    selected_test_data['Price'] = y_target_train.values
     selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
     selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
 
     print('\nTraining data...')
     # predict_by_SVR(selected_train_data)
     # predict_by_linear_regression(selected_train_data)
-    predict_by_RFR_combine_randomsearchCV(selected_train_data)
+    # predict_by_RFR_combine_randomsearchCV(selected_train_data)
+    y_target_predict = predict_non_label_data_by_RFR(selected_train_data, selected_test_data)
+    predicted_result = pd.DataFrame(data=np.exp(y_target_predict).astype(int), index=None, columns=['Price'])
+    predicted_result.to_excel('result.xlsx', index=False)
     print('Preprocessing data is complete!')
 
