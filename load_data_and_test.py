@@ -7,11 +7,11 @@ from sklearn.model_selection import ShuffleSplit
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
+from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import LogisticRegression
 from data_preprocessing import load_data
 from data_preprocessing import evaluate_result
-import tensorflow as tf
 
 def predict_by_SVR(X, y):
     X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
@@ -57,43 +57,21 @@ def predict_non_label_data_by_RFR(train_data, predict_data):
     y_predict = rfr.predict(predict_data)
     return y_predict
 
-def neural_network_model(X, dimension):
-    weight_0 = tf.Variable(tf.random_uniform([dimension, 10]))
-    bias_0 = tf.Variable(tf.zeros([10]))
-    layer_0 = tf.add(tf.matmul(X, weight_0), bias_0)
-    layer_0 = tf.nn.relu(layer_0)
-
-    weight_1 = tf.Variable(tf.random_uniform([10, 10]))
-    bias_1 = tf.Variable(tf.zeros([10]))
-    layer_1 = tf.add(tf.matmul(layer_0, weight_1), bias_1)
-    layer_1 = tf.nn.relu(layer_1)
-    
-    weight_2 = tf.Variable(tf.random_uniform([10, 1]))
-    bias_2 = tf.Variable(tf.zeros([1]))
-    output = tf.add(tf.matmul(layer_1, weight_2), bias_2)
-
-    return output
-
-def excute_neural_network_model(X, y, dimension):
+def predict_by_neural_network(X, y):
     X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
-    xs = tf.placeholder('float')
-    ys = tf.placeholder('float')
-    output = neural_network_model(xs, dimension)
-    cost = tf.reduce_mean(tf.square(output - ys))
-    train = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        for i in range(2):
-            for j in range(X_to_train.shape[0]):
-                sess.run([cost, train], feed_dict = {xs: X_to_train[j,:].reshape(1,dimension), ys:y_to_train[j]})
-        y_pred = sess.run(output, feed_dict={xs:X_to_test})
-    evaluate_result(y_to_test, y_pred)
-
+    neural = MLPRegressor(hidden_layer_sizes=200, max_iter=200)
+    neural.fit(X_to_train, y_to_train)
+    y_to_predict = neural.predict(X_to_test)
+    evaluate_result(y_to_test, y_to_predict)
 
 if __name__ == "__main__":
     training_data, predicting_data = load_data('final_feature/train_data_after_selecting.xlsx', 'final_feature/test_data_after_selecting.xlsx')
     X = training_data.values[:,:-1]
     y = training_data.values[:,-1]
-    # predict_by_RFR_combine_randomsearchCV(X, y)
-    # predict_by_logistic_regression(X, y)
-    excute_neural_network_model(X, y, X.shape[1])
+
+    # predict_by_linear_regression(X, y)        #accuracy = 0.5292941437111072
+    # predict_by_SVR(X, y)                      #accuracy=0.8513313784153758
+    # predict_by_RFR_combine_randomsearchCV(X, y) #accuracy=0.8524250566810908
+    # predict_by_logistic_regression(X, y) #non_useful, maybe only apply to classification problem
+    # predict_by_neural_network(X, y)           #accuracy = 0.7916816635000207
+    # excute_neural_network_model(X, y, X.shape[1])

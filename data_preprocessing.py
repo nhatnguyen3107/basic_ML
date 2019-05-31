@@ -131,49 +131,6 @@ def reduce_features_by_pca(X):
     # print('Components: ', fit.components_)
     return new_data
 
-def predict_by_SVR(data_frame):
-    X = data_frame.values[:,:-1]
-    y = data_frame.values[:,-1]
-    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
-    svr = SVR(kernel= 'rbf', degree=4, gamma='auto')
-    svr.fit(X_to_train, y_to_train)
-    y_to_predict = svr.predict(X_to_test)
-    evaluate_result(y_to_test, y_to_predict)
-
-def predict_by_linear_regression(data_frame):
-    X = data_frame.values[:,:-1]
-    y = data_frame.values[:,-1]
-    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
-    lireg = LinearRegression(fit_intercept=True, normalize=True)
-    lireg.fit(X_to_train, y_to_train)
-    y_to_predict = lireg.predict(X_to_test)
-    evaluate_result(y_to_test, y_to_predict)
-
-def predict_by_RFR_combine_randomsearchCV(data_frame):
-    X = data_frame.values[:,:-1]
-    y = data_frame.values[:,-1]
-    X_to_train, X_to_test, y_to_train, y_to_test = train_test_split(X, y, random_state=42, test_size=0.3)
-    estimator = RandomForestRegressor()
-    cv = ShuffleSplit(n_splits=5, random_state=42, test_size=0.3)
-    random_grid = {'max_features' : ['auto', 'sqrt', 'log2'],
-                    'n_estimators': [10, 18, 22, 200, 700],
-                    'min_samples_split': [2, 5, 10],
-                    'min_samples_leaf' : [1, 2, 4]}
-    rf_random = RandomizedSearchCV(estimator=estimator, param_distributions=random_grid, cv=cv, random_state=42, n_jobs=4)
-    rf_random.fit(X_to_train, y_to_train)
-    y_to_predict = rf_random.predict(X_to_test)
-    print('Best hyper-para after tuning', rf_random.best_params_)
-    evaluate_result(y_to_test, y_to_predict)
-
-def predict_non_label_data_by_RFR(train_data, predict_data):
-    X_to_train = train_data.drop('Price', axis=1)
-    y_to_train = train_data['Price']
-    rfr = RandomForestRegressor(n_estimators=700, min_samples_split=2, min_samples_leaf=2, max_features = 'auto')
-    rfr.fit(X_to_train, y_to_train)
-    y_predict = rfr.predict(predict_data)
-    return y_predict
-
-
 if __name__ == "__main__":
     raw_train_data_frame, raw_test_data_frame = load_data('raw_data/Data_Train.xlsx', 'raw_data/Test_set.xlsx')
     print('Train Data Shape: ', raw_train_data_frame.shape)
@@ -216,12 +173,5 @@ if __name__ == "__main__":
     selected_train_data.to_excel('final_feature/train_data_after_selecting.xlsx', index=False)
     selected_test_data.to_excel('final_feature/test_data_after_selecting.xlsx', index=False)
 
-    print('\nTraining data...')
-    # predict_by_SVR(selected_train_data)
-    # predict_by_linear_regression(selected_train_data)
-    # predict_by_RFR_combine_randomsearchCV(selected_train_data)
-    y_target_predict = predict_non_label_data_by_RFR(selected_train_data, selected_test_data)
-    predicted_result = pd.DataFrame(data=np.exp(y_target_predict).astype(int), index=None, columns=['Price'])
-    predicted_result.to_excel('result.xlsx', index=False)
     print('Preprocessing data is complete!')
 
